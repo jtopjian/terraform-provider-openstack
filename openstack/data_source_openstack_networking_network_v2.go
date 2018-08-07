@@ -3,7 +3,6 @@ package openstack
 import (
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/hashicorp/terraform/helper/schema"
 
@@ -46,11 +45,11 @@ func dataSourceNetworkingNetworkV2() *schema.Resource {
 				Description: descriptions["tenant_id"],
 			},
 			"admin_state_up": &schema.Schema{
-				Type:     schema.TypeString,
+				Type:     schema.TypeBool,
 				Computed: true,
 			},
 			"shared": &schema.Schema{
-				Type:     schema.TypeString,
+				Type:     schema.TypeBool,
 				Computed: true,
 			},
 			"external": &schema.Schema{
@@ -139,9 +138,9 @@ func dataSourceNetworkingNetworkV2Read(d *schema.ResourceData, meta interface{})
 	d.SetId(network.ID)
 
 	d.Set("name", network.Name)
-	d.Set("admin_state_up", strconv.FormatBool(network.AdminStateUp))
-	d.Set("shared", strconv.FormatBool(network.Shared))
-	d.Set("external", strconv.FormatBool(network.External))
+	d.Set("admin_state_up", network.AdminStateUp)
+	d.Set("shared", network.Shared)
+	d.Set("external", network.External)
 	d.Set("tenant_id", network.TenantID)
 	d.Set("region", GetRegion(d, config))
 

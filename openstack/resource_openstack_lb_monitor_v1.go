@@ -3,7 +3,6 @@ package openstack
 import (
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform/helper/resource"
@@ -77,7 +76,7 @@ func resourceLBMonitorV1() *schema.Resource {
 				ForceNew: false,
 			},
 			"admin_state_up": &schema.Schema{
-				Type:     schema.TypeString,
+				Type:     schema.TypeBool,
 				Optional: true,
 				ForceNew: false,
 				Computed: true,
@@ -108,13 +107,10 @@ func resourceLBMonitorV1Create(d *schema.ResourceData, meta interface{}) error {
 		createOpts.Type = monitorType
 	}
 
-	asuRaw := d.Get("admin_state_up").(string)
-	if asuRaw != "" {
-		asu, err := strconv.ParseBool(asuRaw)
-		if err != nil {
-			return fmt.Errorf("admin_state_up, if provided, must be either 'true' or 'false'")
+	if v, ok := d.GetOkExists("admin_state_up"); ok {
+		if asu, ok := v.(bool); ok {
+			createOpts.AdminStateUp = &asu
 		}
-		createOpts.AdminStateUp = &asu
 	}
 
 	log.Printf("[DEBUG] Create Options: %#v", createOpts)
@@ -167,7 +163,7 @@ func resourceLBMonitorV1Read(d *schema.ResourceData, meta interface{}) error {
 	d.Set("url_path", m.URLPath)
 	d.Set("http_method", m.HTTPMethod)
 	d.Set("expected_codes", m.ExpectedCodes)
-	d.Set("admin_state_up", strconv.FormatBool(m.AdminStateUp))
+	d.Set("admin_state_up", m.AdminStateUp)
 	d.Set("region", GetRegion(d, config))
 
 	return nil
@@ -190,14 +186,8 @@ func resourceLBMonitorV1Update(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	if d.HasChange("admin_state_up") {
-		asuRaw := d.Get("admin_state_up").(string)
-		if asuRaw != "" {
-			asu, err := strconv.ParseBool(asuRaw)
-			if err != nil {
-				return fmt.Errorf("admin_state_up, if provided, must be either 'true' or 'false'")
-			}
-			updateOpts.AdminStateUp = &asu
-		}
+		asu := d.Get("admin_state_up").(bool)
+		updateOpts.AdminStateUp = &asu
 	}
 
 	log.Printf("[DEBUG] Updating OpenStack LB Monitor %s with options: %+v", d.Id(), updateOpts)

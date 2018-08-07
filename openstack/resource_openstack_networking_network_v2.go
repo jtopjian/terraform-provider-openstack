@@ -3,7 +3,6 @@ package openstack
 import (
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform/helper/resource"
@@ -43,13 +42,13 @@ func resourceNetworkingNetworkV2() *schema.Resource {
 				ForceNew: false,
 			},
 			"admin_state_up": &schema.Schema{
-				Type:     schema.TypeString,
+				Type:     schema.TypeBool,
 				Optional: true,
 				ForceNew: false,
 				Computed: true,
 			},
 			"shared": &schema.Schema{
-				Type:     schema.TypeString,
+				Type:     schema.TypeBool,
 				Optional: true,
 				ForceNew: false,
 				Computed: true,
@@ -122,22 +121,16 @@ func resourceNetworkingNetworkV2Create(d *schema.ResourceData, meta interface{})
 		MapValueSpecs(d),
 	}
 
-	asuRaw := d.Get("admin_state_up").(string)
-	if asuRaw != "" {
-		asu, err := strconv.ParseBool(asuRaw)
-		if err != nil {
-			return fmt.Errorf("admin_state_up, if provided, must be either 'true' or 'false'")
+	if v, ok := d.GetOkExists("admin_state_up"); ok {
+		if asu, ok := v.(bool); ok {
+			createOpts.AdminStateUp = &asu
 		}
-		createOpts.AdminStateUp = &asu
 	}
 
-	sharedRaw := d.Get("shared").(string)
-	if sharedRaw != "" {
-		shared, err := strconv.ParseBool(sharedRaw)
-		if err != nil {
-			return fmt.Errorf("shared, if provided, must be either 'true' or 'false': %v", err)
+	if v, ok := d.GetOkExists("shared"); ok {
+		if shared, ok := v.(bool); ok {
+			createOpts.Shared = &shared
 		}
-		createOpts.Shared = &shared
 	}
 
 	segments := resourceNetworkingNetworkV2Segments(d)
@@ -217,9 +210,9 @@ func resourceNetworkingNetworkV2Read(d *schema.ResourceData, meta interface{}) e
 	log.Printf("[DEBUG] Retrieved Network %s: %+v", d.Id(), n)
 
 	d.Set("name", n.Name)
-	d.Set("admin_state_up", strconv.FormatBool(n.AdminStateUp))
-	d.Set("shared", strconv.FormatBool(n.Shared))
-	d.Set("external", strconv.FormatBool(n.External))
+	d.Set("admin_state_up", n.AdminStateUp)
+	d.Set("shared", n.Shared)
+	d.Set("external", n.External)
 	d.Set("tenant_id", n.TenantID)
 	d.Set("region", GetRegion(d, config))
 
@@ -241,26 +234,17 @@ func resourceNetworkingNetworkV2Update(d *schema.ResourceData, meta interface{})
 	if d.HasChange("name") {
 		updateOpts.Name = d.Get("name").(string)
 	}
+
 	if d.HasChange("admin_state_up") {
-		asuRaw := d.Get("admin_state_up").(string)
-		if asuRaw != "" {
-			asu, err := strconv.ParseBool(asuRaw)
-			if err != nil {
-				return fmt.Errorf("admin_state_up, if provided, must be either 'true' or 'false'")
-			}
-			updateOpts.AdminStateUp = &asu
-		}
+		asu := d.Get("admin_state_up").(bool)
+		updateOpts.AdminStateUp = &asu
 	}
+
 	if d.HasChange("shared") {
-		sharedRaw := d.Get("shared").(string)
-		if sharedRaw != "" {
-			shared, err := strconv.ParseBool(sharedRaw)
-			if err != nil {
-				return fmt.Errorf("shared, if provided, must be either 'true' or 'false': %v", err)
-			}
-			updateOpts.Shared = &shared
-		}
+		shared := d.Get("shared").(bool)
+		updateOpts.Shared = &shared
 	}
+
 	isExternal := false
 	if d.HasChange("external") {
 		isExternal = d.Get("external").(bool)
