@@ -111,11 +111,31 @@ resource "openstack_lb_listener_v2" "listener_1" {
   loadbalancer_id = "${openstack_lb_loadbalancer_v2.loadbalancer_1.id}"
 }
 
+resource "openstack_lb_listener_v2" "listener_2" {
+  name = "listener_2"
+  protocol = "HTTP"
+  protocol_port = 8090
+  loadbalancer_id = "${openstack_lb_loadbalancer_v2.loadbalancer_1.id}"
+}
+
 resource "openstack_lb_pool_v2" "pool_1" {
   name = "pool_1"
   protocol = "HTTP"
   lb_method = "ROUND_ROBIN"
   listener_id = "${openstack_lb_listener_v2.listener_1.id}"
+
+  timeouts {
+    create = "5m"
+    update = "5m"
+    delete = "5m"
+  }
+}
+
+resource "openstack_lb_pool_v2" "pool_2" {
+  name = "pool_2"
+  protocol = "HTTP"
+  lb_method = "ROUND_ROBIN"
+  listener_id = "${openstack_lb_listener_v2.listener_2.id}"
 
   timeouts {
     create = "5m"
@@ -150,12 +170,33 @@ resource "openstack_lb_listener_v2" "listener_1" {
   loadbalancer_id = "${openstack_lb_loadbalancer_v2.loadbalancer_1.id}"
 }
 
+resource "openstack_lb_listener_v2" "listener_2" {
+  name = "listener_2"
+  protocol = "HTTP"
+  protocol_port = 8090
+  loadbalancer_id = "${openstack_lb_loadbalancer_v2.loadbalancer_1.id}"
+}
+
 resource "openstack_lb_pool_v2" "pool_1" {
   name = "pool_1_updated"
   protocol = "HTTP"
   lb_method = "LEAST_CONNECTIONS"
   admin_state_up = "true"
   listener_id = "${openstack_lb_listener_v2.listener_1.id}"
+
+  timeouts {
+    create = "5m"
+    update = "5m"
+    delete = "5m"
+  }
+}
+
+resource "openstack_lb_pool_v2" "pool_2" {
+  name = "pool_2_updated"
+  protocol = "HTTP"
+  lb_method = "LEAST_CONNECTIONS"
+  admin_state_up = "true"
+  listener_id = "${openstack_lb_listener_v2.listener_2.id}"
 
   timeouts {
     create = "5m"

@@ -46,12 +46,15 @@ func waitForLBV2Listener(lbClient *gophercloud.ServiceClient, listener *listener
 	log.Printf("[DEBUG] Waiting for listener %s to become %s.", listener.ID, target)
 
 	var refreshFunc resource.StateRefreshFunc
-	if listener.ProvisioningStatus != "" {
+
+	// If the target is DELETED, perform a GET on the listener until it no
+	// longer exists. Otherwise, poll the load balancer's status.
+	if target == "DELETED" {
 		refreshFunc = resourceLBV2ListenerRefreshFunc(lbClient, listener.ID)
 	} else {
 		if len(listener.Loadbalancers) > 0 {
 			lbID := listener.Loadbalancers[0].ID
-			refreshFunc = resourceLBV2LoadBalancerStatusRefreshFunc(lbClient, lbID, "listener", listener.ID)
+			refreshFunc = resourceLBV2LoadBalancerRefreshFunc(lbClient, lbID)
 		}
 	}
 
@@ -84,12 +87,12 @@ func waitForLBV2Listener(lbClient *gophercloud.ServiceClient, listener *listener
 
 func resourceLBV2ListenerRefreshFunc(lbClient *gophercloud.ServiceClient, id string) resource.StateRefreshFunc {
 	return func() (interface{}, string, error) {
-		lb, err := listeners.Get(lbClient, id).Extract()
+		listener, err := listeners.Get(lbClient, id).Extract()
 		if err != nil {
 			return nil, "", err
 		}
 
-		return lb, lb.ProvisioningStatus, nil
+		return listener, "ACTIVE", nil
 	}
 }
 
@@ -136,7 +139,10 @@ func waitForLBV2Member(lbClient *gophercloud.ServiceClient, parentPool *pools.Po
 	log.Printf("[DEBUG] Waiting for member %s to become %s.", member.ID, target)
 
 	var refreshFunc resource.StateRefreshFunc
-	if member.ProvisioningStatus != "" {
+
+	// If the target is DELETED, perform a GET on the member until it no
+	// longer exists. Otherwise, poll the load balancer's status.
+	if target == "DELETED" {
 		refreshFunc = resourceLBV2MemberRefreshFunc(lbClient, parentPool.ID, member.ID)
 	} else {
 		lbID, err := lbV2FindLBIDviaPool(lbClient, parentPool)
@@ -144,7 +150,7 @@ func waitForLBV2Member(lbClient *gophercloud.ServiceClient, parentPool *pools.Po
 			return err
 		}
 
-		refreshFunc = resourceLBV2LoadBalancerStatusRefreshFunc(lbClient, lbID, "member", member.ID)
+		refreshFunc = resourceLBV2LoadBalancerRefreshFunc(lbClient, lbID)
 	}
 
 	stateConf := &resource.StateChangeConf{
@@ -177,7 +183,7 @@ func resourceLBV2MemberRefreshFunc(lbClient *gophercloud.ServiceClient, poolID, 
 			return nil, "", err
 		}
 
-		return member, member.ProvisioningStatus, nil
+		return member, "ACTIVE", nil
 	}
 }
 
@@ -185,7 +191,10 @@ func waitForLBV2Monitor(lbClient *gophercloud.ServiceClient, parentPool *pools.P
 	log.Printf("[DEBUG] Waiting for monitor %s to become %s.", monitor.ID, target)
 
 	var refreshFunc resource.StateRefreshFunc
-	if monitor.ProvisioningStatus != "" {
+
+	// If the target is DELETED, perform a GET on the member until it no
+	// longer exists. Otherwise, poll the load balancer's status.
+	if target == "DELETED" {
 		refreshFunc = resourceLBV2MonitorRefreshFunc(lbClient, monitor.ID)
 	} else {
 		lbID, err := lbV2FindLBIDviaPool(lbClient, parentPool)
@@ -193,7 +202,7 @@ func waitForLBV2Monitor(lbClient *gophercloud.ServiceClient, parentPool *pools.P
 			return err
 		}
 
-		refreshFunc = resourceLBV2LoadBalancerStatusRefreshFunc(lbClient, lbID, "monitor", monitor.ID)
+		refreshFunc = resourceLBV2LoadBalancerRefreshFunc(lbClient, lbID)
 	}
 
 	stateConf := &resource.StateChangeConf{
@@ -225,7 +234,7 @@ func resourceLBV2MonitorRefreshFunc(lbClient *gophercloud.ServiceClient, id stri
 			return nil, "", err
 		}
 
-		return monitor, monitor.ProvisioningStatus, nil
+		return monitor, "ACTIVE", nil
 	}
 }
 
@@ -233,7 +242,10 @@ func waitForLBV2Pool(lbClient *gophercloud.ServiceClient, pool *pools.Pool, targ
 	log.Printf("[DEBUG] Waiting for pool %s to become %s.", pool.ID, target)
 
 	var refreshFunc resource.StateRefreshFunc
-	if pool.ProvisioningStatus != "" {
+
+	// If the target is DELETED, perform a GET on the member until it no
+	// longer exists. Otherwise, poll the load balancer's status.
+	if target == "DELETED" {
 		refreshFunc = resourceLBV2PoolRefreshFunc(lbClient, pool.ID)
 	} else {
 		lbID, err := lbV2FindLBIDviaPool(lbClient, pool)
@@ -241,7 +253,7 @@ func waitForLBV2Pool(lbClient *gophercloud.ServiceClient, pool *pools.Pool, targ
 			return err
 		}
 
-		refreshFunc = resourceLBV2LoadBalancerStatusRefreshFunc(lbClient, lbID, "pool", pool.ID)
+		refreshFunc = resourceLBV2LoadBalancerRefreshFunc(lbClient, lbID)
 	}
 
 	stateConf := &resource.StateChangeConf{
@@ -274,7 +286,7 @@ func resourceLBV2PoolRefreshFunc(lbClient *gophercloud.ServiceClient, id string)
 			return nil, "", err
 		}
 
-		return pool, pool.ProvisioningStatus, nil
+		return pool, "ACTIVE", nil
 	}
 }
 
@@ -296,62 +308,4 @@ func lbV2FindLBIDviaPool(lbClient *gophercloud.ServiceClient, pool *pools.Pool) 
 	}
 
 	return "", fmt.Errorf("Unable to determine loadbalancer ID from pool %s", pool.ID)
-}
-
-func resourceLBV2LoadBalancerStatusRefreshFunc(lbClient *gophercloud.ServiceClient, lbID, resourceType, resourceID string) resource.StateRefreshFunc {
-	return func() (interface{}, string, error) {
-		statuses, err := loadbalancers.GetStatuses(lbClient, lbID).Extract()
-		if err != nil {
-			return nil, "", fmt.Errorf("Unable to get statuses from the Load Balancer %s statuses tree: %s", lbID, err)
-		}
-
-		switch resourceType {
-		case "listener":
-			for _, listener := range statuses.Loadbalancer.Listeners {
-				if listener.ID == resourceID {
-					if listener.ProvisioningStatus != "" {
-						return listener, listener.ProvisioningStatus, nil
-					}
-				}
-			}
-			listener, err := listeners.Get(lbClient, resourceID).Extract()
-			return listener, "ACTIVE", err
-
-		case "pool":
-			for _, pool := range statuses.Loadbalancer.Pools {
-				if pool.ID == resourceID {
-					if pool.ProvisioningStatus != "" {
-						return pool, pool.ProvisioningStatus, nil
-					}
-				}
-			}
-			pool, err := pools.Get(lbClient, resourceID).Extract()
-			return pool, "ACTIVE", err
-
-		case "monitor":
-			for _, pool := range statuses.Loadbalancer.Pools {
-				if pool.Monitor.ID == resourceID {
-					if pool.Monitor.ProvisioningStatus != "" {
-						return pool.Monitor, pool.Monitor.ProvisioningStatus, nil
-					}
-				}
-			}
-			monitor, err := monitors.Get(lbClient, resourceID).Extract()
-			return monitor, "ACTIVE", err
-
-		case "member":
-			for _, pool := range statuses.Loadbalancer.Pools {
-				for _, member := range pool.Members {
-					if member.ID == resourceID {
-						if member.ProvisioningStatus != "" {
-							return member, member.ProvisioningStatus, nil
-						}
-					}
-				}
-			}
-			return "", "DELETED", nil
-		}
-
-		return nil, "", fmt.Errorf("An unexpected error occurred querying the status of %s %s by loadbalancer %s", resourceType, resourceID, lbID)
-	}
 }
