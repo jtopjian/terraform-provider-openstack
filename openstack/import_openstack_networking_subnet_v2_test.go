@@ -26,3 +26,24 @@ func TestAccNetworkingV2Subnet_importBasic(t *testing.T) {
 		},
 	})
 }
+
+func TestAccNetworkingV2Subnet_importHostRoutes(t *testing.T) {
+	resourceName := "openstack_networking_subnet_v2.subnet_1"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckNetworkingV2SubnetDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccNetworkingV2Subnet_subnetHostRoutes2,
+			},
+
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
