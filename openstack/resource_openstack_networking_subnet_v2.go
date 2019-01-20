@@ -20,7 +20,7 @@ func resourceNetworkingSubnetV2() *schema.Resource {
 		Update: resourceNetworkingSubnetV2Update,
 		Delete: resourceNetworkingSubnetV2Delete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			resourceNetworkingSubnetV2Import,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -407,6 +407,38 @@ func resourceNetworkingSubnetV2Delete(d *schema.ResourceData, meta interface{}) 
 
 	d.SetId("")
 	return nil
+}
+
+func resourceNetworkingSubnetV2Import(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	config := meta.(*Config)
+	networkingClient, err := config.networkingV2Client(GetRegion(d, config))
+	if err != nil {
+		return nil, fmt.Errorf("Error creating OpenStack networking client: %s", err)
+	}
+
+	subnet, err := subnets.Get(networkingClient, d.Id()).Extract()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to retrieve openstack_networking_subnet_v2 %s: %s", d.Id(), err)
+	}
+
+	hostRoutes := flattenNetworkingSubnetV2HostRoutes(subnet.HostRoutes)
+	d.Set("host_routes", hostRoutes)
+
+	return []*schema.ResourceData{d}, nil
+}
+
+func flattenNetworkingSubnetV2HostRoutes(v []subnets.HostRoute) []map[string]string {
+	hostRoutes := make([]map[string]string, len(v))
+
+	for i, hostRoute := range v {
+		m := map[string]string{}
+		m["destination_cidr"] = hostRoute.DestinationCIDR
+		m["next_hop"] = hostRoute.NextHop
+
+		hostRoutes[i] = m
+	}
+
+	return hostRoutes
 }
 
 func resourceSubnetAllocationPoolsV2(d *schema.ResourceData) []subnets.AllocationPool {
