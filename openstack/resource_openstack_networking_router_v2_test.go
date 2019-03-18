@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform/terraform"
 
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/routers"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
 )
 
 func TestAccNetworkingV2Router_basic(t *testing.T) {
@@ -107,7 +108,9 @@ func TestAccNetworkingV2Router_vendor_opts_no_snat(t *testing.T) {
 	})
 }
 
-func TestAccNetworkingV2Router_extFixedIPs(t *testing.T) {
+func TestAccNetworkingV2Router_extFixedIPSubnet(t *testing.T) {
+	var subnet subnets.Subnet
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -117,25 +120,16 @@ func TestAccNetworkingV2Router_extFixedIPs(t *testing.T) {
 		CheckDestroy: testAccCheckNetworkingV2RouterDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccNetworkingV2Router_extFixedIPs1,
+				Config: testAccNetworkingV2Router_extFixedIPSubnet,
 				Check: resource.ComposeTestCheckFunc(
+					testAccCheckNetworkingV2SubnetExists(
+						"openstack_networking_subnet_v2.public_subnet_2", &subnet),
 					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "name", "router_2"),
+						"openstack_networking_router_v2.router_1", "name", "router_1"),
 					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "external_fixed_ip.#", "3"), // defaults are ipv4+ipv6, we add an extra ipv4
-					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "enable_snat", "true"),
-				),
-			},
-			{
-				Config: testAccNetworkingV2Router_extFixedIPs2,
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "name", "router_2"),
-					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "external_fixed_ip.#", "2"), // should be restored to defaults
-					resource.TestCheckResourceAttr(
-						"openstack_networking_router_v2.router_2", "enable_snat", "false"),
+						"openstack_networking_router_v2.router_1", "external_fixed_ip.#", "1"),
+					resource.TestCheckResourceAttrPtr(
+						"openstack_networking_router_v2.router_1", "external_fixed_ip.0.subnet_id", &subnet.ID),
 				),
 			},
 		},
@@ -259,73 +253,30 @@ resource "openstack_networking_router_v2" "router_1" {
 }
 `, OS_EXTGW_ID)
 
-var testAccNetworkingV2Router_extFixedIPs1 = fmt.Sprintf(`
-resource "openstack_networking_router_v2" "router_1" {
-  name = "router_1"
-  admin_state_up = "true"
-  external_network_id = "%s"
-
-  timeouts {
-    create = "5m"
-    delete = "5m"
-  }
+const testAccNetworkingV2Router_extFixedIPSubnet = `
+// This assumes a devstack configuration with an existing
+// network called "public".
+data "openstack_networking_network_v2" "public" {
+	name = "public"
 }
 
-resource "openstack_networking_router_v2" "router_2" {
-  name = "router_2"
+// This creates a second public subnet.
+// The name "public-subnet-2" is because there is an existing subnet
+// called "public-subnet" in devstack.
+resource "openstack_networking_subnet_v2" "public_subnet_2" {
+	name = "public-subnet-2"
+	cidr = "172.24.5.0/24"
+	network_id = "${data.openstack_networking_network_v2.public.id}"
+}
+
+resource "openstack_networking_router_v2" "router_1" {
+  name = "router_1"
   admin_state_up = "true"
   enable_snat = "true"
-  external_network_id = "%s"
+  external_network_id = "${data.openstack_networking_network_v2.public.id}"
 
-  external_fixed_ip = [
-    {
-      subnet_id = "${openstack_networking_router_v2.router_1.external_fixed_ip.0.subnet_id}"
-    },
-    {
-      subnet_id = "${openstack_networking_router_v2.router_1.external_fixed_ip.1.subnet_id}"
-    },
-    {
-      subnet_id = "${openstack_networking_router_v2.router_1.external_fixed_ip.0.subnet_id}"
-    },
-  ]
-
-  timeouts {
-    create = "5m"
-    delete = "5m"
+  external_fixed_ip {
+    subnet_id = "${openstack_networking_subnet_v2.public_subnet_2.id}"
   }
 }
-`, OS_EXTGW_ID, OS_EXTGW_ID)
-
-var testAccNetworkingV2Router_extFixedIPs2 = fmt.Sprintf(`
-resource "openstack_networking_router_v2" "router_1" {
-  name = "router_1"
-  admin_state_up = "true"
-  external_network_id = "%s"
-
-  timeouts {
-    create = "5m"
-    delete = "5m"
-  }
-}
-
-resource "openstack_networking_router_v2" "router_2" {
-  name = "router_2"
-  admin_state_up = "true"
-  external_network_id = "%s"
-  enable_snat = "false"
-
-  external_fixed_ip = [
-    {
-      subnet_id = "${openstack_networking_router_v2.router_1.external_fixed_ip.0.subnet_id}"
-    },
-    {
-      subnet_id = "${openstack_networking_router_v2.router_1.external_fixed_ip.1.subnet_id}"
-    },
-  ]
-
-  timeouts {
-    create = "5m"
-    delete = "5m"
-  }
-}
-`, OS_EXTGW_ID, OS_EXTGW_ID)
+`
