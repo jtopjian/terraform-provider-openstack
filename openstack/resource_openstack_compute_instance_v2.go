@@ -257,6 +257,11 @@ func resourceComputeInstanceV2() *schema.Resource {
 							Optional: true,
 							ForceNew: true,
 						},
+						"volume_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: true,
+						},
 					},
 				},
 			},
@@ -477,6 +482,14 @@ func resourceComputeInstanceV2Create(d *schema.ResourceData, meta interface{}) e
 		blockDevices, err := resourceInstanceBlockDevicesV2(d, vL.([]interface{}))
 		if err != nil {
 			return err
+		}
+
+		// Check if VolumeType was set in any of the Block Devices.
+		// If so, set the client's microversion appropriately.
+		for _, bd := range blockDevices {
+			if bd.VolumeType != "" {
+				computeClient.Microversion = computeV2InstanceBlockDeviceVolumeTypeMicroversion
+			}
 		}
 
 		createOpts = &bootfromvolume.CreateOptsExt{
@@ -1117,6 +1130,7 @@ func resourceInstanceBlockDevicesV2(d *schema.ResourceData, bds []interface{}) (
 			GuestFormat:         bdM["guest_format"].(string),
 			DeviceType:          bdM["device_type"].(string),
 			DiskBus:             bdM["disk_bus"].(string),
+			VolumeType:          bdM["volume_type"].(string),
 		}
 
 		sourceType := bdM["source_type"].(string)
